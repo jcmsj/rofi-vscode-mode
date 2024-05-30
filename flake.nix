@@ -25,6 +25,7 @@
           version = "0.6.2";
           nativeBuildInputs = with pkgs; [
             pkg-config
+            autoPatchelfHook
           ];
           buildInputs = with pkgs; [
             glib
@@ -33,7 +34,6 @@
             sqlite
           ];
           src = ./.;
-
           cargoLock.lockFile = ./Cargo.lock;
           meta = {
             description = "A Rofi mode to open Visual Studio Code workspaces";
