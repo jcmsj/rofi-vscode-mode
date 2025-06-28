@@ -1,151 +1,102 @@
-# VSCode mode for Rofi
+# rofi-vscode-mode Nix Flake
 
-[![CI Workflow](https://github.com/fuljo/rofi-vscode-mode/actions/workflows/ci.yml/badge.svg)](https://github.com/fuljo/rofi-vscode-mode/actions)
+A Nix flake for building [rofi-vscode-mode](https://github.com/fuljo/rofi-vscode-mode) - a Rofi mode to open Visual Studio Code workspaces.
 
+## About
 
-A very handy Rofi menu to open recent Visual Studio Code workspacess and files, written in Rust.
+This repository contains only a Nix flake for building the rofi-vscode-mode project. The actual source code remains in the [original repository](https://github.com/fuljo/rofi-vscode-mode), and this flake fetches it as an input.
 
-![Demonstration of open menu](assets/demo_papirus_icons.png)
-
-Main features:
-- A custom-implemented Rofi mode (a.k.a. plugin) named `vscode-recent`, to open recent workspaces and files.
-- The `vscode-recent` command line tool to print paths of recent workspaces and files to stdout. Pair it with a selection tool like [dmenu](https://tools.suckless.org/dmenu/), [fzf](https://github.com/junegunn/fzf) or similar.
-- Entries are taken from VSCode's _File->Open Recent_ menu.
-- Delete entries from recently opened (also affects VSCode).
-- Support for [remote](https://code.visualstudio.com/docs/remote/remote-overview) and [virtual](https://code.visualstudio.com/api/extension-guides/virtual-workspaces) workspaces, files and folders.
-- Support for different flavors: [Visual Studio Code](https://code.visualstudio.com), [Visual Studio Code Insiders](https://code.visualstudio.com/insiders), [Code - OSS](https://github.com/microsoft/vscode) and [VSCodium](https://vscodium.com).
-
-This project was largely inspired by [rofi-code](https://github.com/Coffelius).
-Many thanks to [@Coffelius](https://github.com/Coffelius) for writing it, and to [@SabrinaJewson](https://github.com/SabrinaJewson) for providing Rust bindings to Rofi's C plugin interface.
-
-If you are curious, I wrote a short [wiki article](https://github.com/fuljo/rofi-vscode-mode/wiki/How-it-works) explaining how this tool gets the recent items and opens them.
-
-## Install
-
-### Package manager
-If you're an Arch Linux user, this package is available [on the AUR](https://aur.archlinux.org/packages/rofi-vscode-mode).
-You can easily install it with an AUR helper like `yay`, `paru`, `pacaur`, etc.
-```sh
-yay -S rofi-vscode-mode
-```
-
-### Build from source
-You can choose to build and install only the `vscode-recent` tool (binary), only the plugin or both.
-
-First clone this repository
-```sh
-git clone https://github.com/fuljo/rofi-vscode-mode
-```
-
-Then get a [Rust toolchain](https://www.rust-lang.org/tools/install) as you prefer.
-
-Then install the needed dependencies
-```sh
-# Ubuntu / Debian
-apt-get install \
-  build-essential pkg-config libsqlite3-dev \
-  rofi-dev libpango1.0-dev  # only needed for the rofi plugin
-
-# Arch
-pacman -S \
-  make pkg-config sqlite \
-  rofi # only needed for the rofi plugin
-```
-
-Then run `make` according to your choice:
-```sh
-# Binary and plugin
-make all
-sudo make install
-
-# Binary only
-make bin
-sudo make install.bin
-
-# Plugin only
-make plugin
-sudo make install.plugin
-```
+This pattern allows for:
+- **Separation of concerns**: Build configuration is separate from source code
+- **Version pinning**: Specific commits/tags can be pinned for reproducible builds
+- **Easy maintenance**: Updates to the original project don't require changes here unless build dependencies change
+- **Nix-first approach**: Provides a clean Nix interface without cluttering the upstream repository
 
 ## Usage
 
-### As a Rofi mode
-This library introduces a new mode named `vscode-recent`.
-You can run it standalone with the command
-```sh
-rofi -show vscode-recent -modi vscode-recent
+### Building
+
+To build the package:
+
+```bash
+nix build
 ```
-or add it to your default _modi_ in `~/.config/rofi/config.rasi`, like so
+
+### Installing
+
+To install the package to your profile:
+
+```bash
+nix profile install
 ```
-configuration {
-	modi: "drun,run,window,vscode-recent";
-    show-icons:                 true;
-	drun-display-format:        "{name}";
-	window-format:              "{w} | {c} | {t}";
+
+### Running directly
+
+To run without installing:
+
+```bash
+nix run
+```
+
+### Using in your system configuration
+
+Add this flake as an input to your system flake:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    rofi-vscode-mode = {
+      url = "github:yourusername/rofi-vscode-mode";  # Update with your repo
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = { self, nixpkgs, rofi-vscode-mode, ... }: {
+    # In your system packages or home-manager
+    environment.systemPackages = with pkgs; [
+      rofi-vscode-mode.packages.${system}.default
+      # ... other packages
+    ];
+  };
 }
 ```
 
-I highly reccommend assigning a keyboard shortcut for this; for example I use <kbd>Mod</kbd> + <kbd>C</kbd> to run `rofi -show vscode-recent` (after adding it to my default modi).
-
-When an item is selected, press:
-- <kbd>Enter</kbd> to open it
-- <kbd>Shift</kbd>+<kbd>Del</kbd> to permanently delete it from the list
-
-:warning: Item deletion works by updating the recent items list in VSCode's state database. Do it at your own risk. Please use this feature when VSCode is closed, otherwise your changes may be overwritten.
-
-### As a command line tool
-If you prefer something other than Rofi to select your entry, we also provide the `vscode-recent` command that simply writes out the paths line by line. You can then pair it with your favourite selection tool, like [dmenu](https://tools.suckless.org/dmenu/) or [fzf](https://github.com/junegunn/fz).
-
-You can use the `-c` option to set the preferred flavor and the `-F` option to set the desired ouput format:
-- `label` (default) will show the "tildified" path, which needs to be expanded. Only local entries are not shown.
-  ```sh
-  sh -c "code $(vscode-recent | dmenu)"
-  ```
-- `absolute-path` will show the full path. Only local entries are shown.
-  ```sh
-  code $(vscode-recent -F absolute-path | dmenu)
-  ```
-- `uri` will show the local or remote URI, read [this](https://code.visualstudio.com/docs/remote/troubleshooting#_connect-to-a-remote-host-from-the-terminal) for hints on how to open it. All entries are shown.
-
-
 ## Configuration
-Various aspects of this plugin can be configured with environment variables.
-If you are using keyboard shortcuts to launch Rofi, make sure that these variables are set in the shell that launches Rofi, e.g. by adding an `export` statement to your `~/.bash_profile`.
 
-Configuration of the theme and everything else is left to Rofi itself.
+After installing, you can use rofi-vscode-mode by adding it to your rofi configuration. Refer to the [original project documentation](https://github.com/fuljo/rofi-vscode-mode) for configuration details.
 
-### VSCode flavor
-Multiple VSCode flavors exist for Linux, see the [Arch Wiki](https://wiki.archlinux.org/title/Visual_Studio_Code) for details.
+## Flake Structure
 
-By default this plugin will try to detect a flavor for which both a command in `$PATH` and a configuration directory exist.
-If you want to select it by hand, set `ROFI_VSCODE_FLAVOR` with one of the following values (case insensitive):
+This flake:
+- Uses [fenix](https://github.com/nix-community/fenix) for the Rust toolchain
+- Fetches source code from the original repository as a flake input
+- Builds using `rustPlatform.buildRustPackage`
+- Includes necessary system dependencies (glib, cairo, pango, sqlite)
 
-| `ROFI_VSCODE_FLAVOR` | Flavor                      | Command         | Configuration directory      |
-| -------------------- | --------------------------- | --------------- | ---------------------------- |
-| `code`               | Visual Studio Code          | `code`          | `~/.config/Code/`            |
-| `code-insiders`      | Visual Studio Code Insiders | `code-insiders` | `~/.config/Code - Insiders/` |
-| `code-oss`           | Code - OSS                  | `code-oss`      | `~/.config/Code - OSS/`      |
-| `vscodium`           | VSCodium                    | `codium`        | `~/.config/VSCodium/`        |
+## Updating
 
-### Icons
-By default icons from Rofi's current icon theme are shown besides the entries. You have three choices:
-- Set `ROFI_VSCODE_ICON_MODE=none` to disable icons
-- Set `ROFI_VSCODE_ICON_MODE=theme` to use the icons from Rofi's current icon theme
-- Set `ROFI_VSCODE_ICON_MODE=nerd` to use icons from a [Nerd Font](https://www.nerdfonts.com/).<br>
-  The font can be chosen by setting `ROFI_VSCODE_ICON_FONT=fontname` (defaults to monospace) and its color by setting
-  `ROFI_VSCODE_ICON_COLOR` to an `#rrggbb` or `#rrggbbaa` value.
+To update to a newer version of rofi-vscode-mode:
 
-A different icon is shown for workspaces, files and folders.
+1. Update the source input to point to the desired commit/tag
+2. Update the `cargoHash` if dependencies have changed
+3. Update the `version` field to match
 
-<img src="assets/demo_no_icons.png" width="49%"> <img src="assets/demo_nerd_icons.png" width="49%">
+```bash
+nix flake update  # Updates to latest commits
+nix build         # Test the build
+```
 
-## Contributing
+## Dependencies
 
-If you like this little piece of software and would like to improve it, please fork the repo and create a pull request. Your contributions are greatly appreciated.
+The package requires the following system libraries:
+- glib
+- cairo  
+- pango
+- sqlite
 
-If you want to report a problem, please open an Issue.
-Make sure you include your Rofi version and any error messages that are printed by running the mode from a terminal as described [before](#usage).
+These are automatically handled by the Nix build.
 
 ## License
 
-This software is released under the MIT license.
+This flake configuration is provided as-is. The rofi-vscode-mode project itself is licensed under the MIT License. See the [original repository](https://github.com/fuljo/rofi-vscode-mode) for details.
